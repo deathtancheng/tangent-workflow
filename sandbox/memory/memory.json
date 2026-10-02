@@ -1,0 +1,68 @@
+{
+  "facts": {
+    "YOLO权重路径": {
+      "value": "runs/detect/runs/coco128_yolo11n/weights/best.pt，mAP0.5=0.7878",
+      "at": 1790861085625,
+      "hits": 4
+    }
+  },
+  "episodes": [
+    {
+      "at": 1790860704229,
+      "goal": "帮我算一下 2 的 10 次方乘以 3 等于多少（必须用 calculator，不要心算），然后把结果写进 notes/smoke-test.md，写一行就够。最后告诉我结果。",
+      "result": "ollama 400: {\"error\":\"Value looks like object, but can't find closing '}' symbol\"}",
+      "turns": 2,
+      "tools": [],
+      "ok": false
+    },
+    {
+      "at": 1790860755921,
+      "goal": "帮我算一下 2 的 10 次方乘以 3 等于多少（必须用 calculator，不要心算），然后把结果写进 notes/smoke-test.md，写一行就够。最后告诉我结果。",
+      "result": "2 的 10 次方乘以 3 等于 3072。",
+      "turns": 3,
+      "tools": [],
+      "ok": true
+    },
+    {
+      "at": 1790861068125,
+      "goal": "查一下 2026 年今天是几月几号，然后算一下距离年底还有多少天，把这两个数字写进 notes/e2e.md。",
+      "result": "已将 \"2026年10月1日，距离年底还有64天。\" 写入 notes/e2e.md。",
+      "turns": 4,
+      "tools": [],
+      "ok": true
+    },
+    {
+      "at": 1790861087320,
+      "goal": "把这条信息存进长期记忆：key 叫「YOLO权重路径」，value 是「runs/detect/runs/coco128_yolo11n/weights/best.pt，mAP0.5=0.7878」。存完告诉我存好了没。",
+      "result": "已记住事实「YOLO权重路径」。",
+      "turns": 2,
+      "tools": [],
+      "ok": true
+    },
+    {
+      "at": 1790861091595,
+      "goal": "我们之前训的那个 YOLO 权重放在哪个路径？去长期记忆里查一下，把路径和 mAP 告诉我。",
+      "result": "YOLO 权重路径是 `runs/detect/runs/coco128_yolo11n/weights/best.pt`，对应的 mAP0.5 是 0.7878。",
+      "turns": 2,
+      "tools": [],
+      "ok": true
+    },
+    {
+      "at": 1790861104472,
+      "goal": "用摄像头看看现在画面里有什么东西。如果看不到，就直说原因，别编。",
+      "result": "画面里没有检测到任何物体，可能是太暗或者没有可识别的内容。",
+      "turns": 2,
+      "tools": [],
+      "ok": true
+    },
+    {
+      "at": 1790861112261,
+      "goal": "用 bash 列一下工作区 notes 目录里有哪些文件（只读操作，别删东西）。",
+      "result": "notes 目录下的文件有：\n- .audit.log\n- e2e.md\n- report-2026-10-01-13-18-24.md\n- report-2026-10-01-13-19-15.md\n- report-2026-10-01-13-24-28.md\n- report-2026-10-01-13-24-47.md\n- report-2026-10-01-13-24-51.md\n- report-2026-10-01-13-25-04.md\n- smoke-test.md\n- welcome.md",
+      "turns": 2,
+      "tools": [],
+      "ok": true
+    }
+  ],
+  "updatedAt": "2026-10-01T13:25:12.261Z"
+}

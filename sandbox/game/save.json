@@ -1,0 +1,9 @@
+{
+  "level": 1,
+  "playerHp": 100,
+  "guardianHp": 50,
+  "offerings": [],
+  "cleared": false,
+  "over": null,
+  "startedAt": "2026-10-02T07:09:10.495Z"
+}

@@ -167,7 +167,17 @@ class Agent {
         const messages = fitted.messages;
 
         // ------------------------------------------------------ model:start
-        await lifecycle.run(HOOKS.MODEL_START, { traceId, turn, messages, agent: this });
+        // 钩子可以在这里改写"即将发出的 messages"。游戏用它动态注入守阁灵
+        // 的身份（层数变了身份也变），所以这里必须把改写结果接回来，
+        // 不能像事件那样发完就丢——这就是钩子与事件的分工。
+        const modelStartCtx = await lifecycle.run(HOOKS.MODEL_START, {
+          traceId,
+          turn,
+          messages,
+          agent: this,
+        });
+        const outMessages =
+          modelStartCtx && modelStartCtx.messages ? modelStartCtx.messages : messages;
         lifecycle.emit('model', { traceId, turn, phase: 'start', tokens: fitted.tokens });
 
         // 流式收。每片都过一遍 model:stream 钩子，让 UI 和审计都能看到
@@ -177,7 +187,7 @@ class Agent {
         let usage = null;
 
         const stream = this.provider.chat({
-          messages,
+          messages: outMessages,
           tools: this.tools.schema(),
           temperature: this.temperature,
           think: this.think,

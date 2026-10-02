@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>拾物奇谭 · 万物阁</title>
+<link rel="stylesheet" href="/public/game.css">
+</head>
+<body>
+<div class="stage">
+
+  <header>
+    <h1>拾物奇谭</h1>
+    <span class="sub">摄像头是手柄 · YOLO 读招 · 本地大模型当守阁灵</span>
+    <span class="floor">第 <b id="lv">1</b> / 5 层</span>
+    <button class="btn" id="btnReset">重开一局</button>
+    <a class="btn" href="/">← 回实验室</a>
+  </header>
+
+  <main>
+    <!-- 左：摄像头 + 祭品 -->
+    <section>
+      <div class="cam-wrap" id="camWrap">
+        <img id="cam" src="/api/camera/video" alt="摄像头">
+        <canvas id="overlay"></canvas>
+        <div class="cam-off">摄像头未连接<br><small>启动 yolo/camera_server.py 后刷新</small></div>
+      </div>
+
+      <div class="offer">
+        <div class="label">当前祭品</div>
+        <div class="name empty" id="offerName">镜头前还没有东西</div>
+        <div class="meta" id="offerMeta"></div>
+        <button class="btn-offer" id="btnOffer" disabled>献 祭 此 物</button>
+      </div>
+
+      <div class="banner" style="margin-top:12px">
+        举得<b>越近越大</b>威力越高，识别<b>越准</b>打得越实，
+        属性<b>克制</b>守阁灵时伤害接近翻倍。
+      </div>
+    </section>
+
+    <!-- 右：守阁灵 -->
+    <section>
+      <div class="guardian">
+        <div class="g-head">
+          <span class="g-name" id="gName">—</span>
+          <span class="g-ele" id="gEle">—</span>
+          <span class="g-tone" id="gTone"></span>
+        </div>
+        <div class="bar"><i id="gBar"></i></div>
+        <div class="hp-text"><span id="gHp">— / —</span><span id="gScene"></span></div>
+      </div>
+
+      <div class="speech" id="speech">阁门未开……</div>
+
+      <div class="player-row">
+        <div class="who"><span>旅人</span><span class="hp-text" style="margin:0" id="pHp">100 / 100</span></div>
+        <div class="bar player"><i id="pBar"></i></div>
+      </div>
+
+      <div class="chips" id="chips" style="margin-top:10px"></div>
+    </section>
+  </main>
+
+  <section class="log" id="log">
+    <div class="row"><span class="idx">—</span><span class="what">把身边的东西举到镜头前，点「献祭此物」开始。</span></div>
+  </section>
+
+  <footer>
+    <input id="chat" placeholder="也可以直接跟守阁灵说话（不消耗祭品）……" autocomplete="off">
+    <button class="btn" id="btnSay">说</button>
+    <div class="hstat">
+      <span class="dot" id="hDot"></span>
+      <span id="hStat">Harness 待命</span>
+    </div>
+  </footer>
+
+</div>
+
+<!-- 权限闸门 / 结算 -->
+<div class="modal" id="modal">
+  <div class="card">
+    <h2 id="mTitle">守阁灵想动笔</h2>
+    <p id="mBody"></p>
+    <pre id="mPre" style="display:none"></pre>
+    <div class="acts" id="mActs"></div>
+  </div>
+</div>
+
+<script src="/public/game.js"></script>
+</body>
+</html>

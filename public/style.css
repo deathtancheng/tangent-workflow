@@ -366,6 +366,15 @@ input[type="range"] { accent-color: var(--accent); }
 .btn-harness:hover { background: #dfe9d4; }
 .btn-harness.on { background: var(--accent); color: #fff; border-style: solid; }
 
+/* 游戏入口：暖黄，跟 btn-harness 那套抹茶绿区分开 */
+.btn-game {
+  display: block; text-align: center; text-decoration: none;
+  padding: 9px; border-radius: 10px; cursor: pointer; transition: .18s;
+  border: 1px solid #e2c078; background: #fbf1dc;
+  color: #8a6520; font-size: 13px; font-weight: 600;
+}
+.btn-game:hover { background: #f5e6c4; }
+
 .app.with-harness { grid-template-columns: 268px 1fr 380px; }
 
 .harness {

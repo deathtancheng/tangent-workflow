@@ -454,11 +454,42 @@ async function readBody(req) {
 
 const { createHarness } = require('./harness');
 const { SessionTree } = require('./harness/context');
+// cameraDetect 本文件第 165 行已经有了，这里只补游戏要的规则函数
+const { pickOffering, GUARDIANS, ELEMENTS } = require('./harness/game-rules');
 
 let harnessInstance = null;
 let harnessLoading = null;
 let currentRun = null; // { controller, pending, since }
 let confirmSeq = 0;
+
+// 游戏单独开一个 Harness 实例：同样六个模块，不同的人格与扩展组合。
+// 这正好验证一件事——换能力不用改内核，换的是外面这一圈怎么拼。
+let gameInstance = null;
+let gameLoading = null;
+let gameRun = null; // { controller, pending }
+
+async function getGameHarness() {
+  if (gameInstance) return gameInstance;
+  if (gameLoading) return gameLoading;
+  gameLoading = createHarness({
+    root: SANDBOX_DIR,
+    model: process.env.HARNESS_MODEL || 'qwen3:8b',
+    extensions: ['quest', 'vision'],
+    system: '你现在不是助手，你是「万物阁」里的一道关。旅人要靠手边的实物闯过去。',
+    maxTurns: Number(process.env.GAME_TURNS || 5),
+  }).then((h) => {
+    gameInstance = h;
+    console.log(`  游戏 Harness 就绪：扩展 [${h.extensions.list().map((e) => e.name).join(', ')}]`);
+    return h;
+  });
+  return gameLoading;
+}
+
+/** 取到 quest 扩展的把手，用来读局面、重开一局 */
+function questDef(h) {
+  const entry = h.extensions.get('quest');
+  return entry ? entry.def : null;
+}
 
 async function getHarness() {
   if (harnessInstance) return harnessInstance;
@@ -750,6 +781,201 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, 200, { ok: true, stats: h.memory.stats() });
       return;
     }
+  }
+
+  // ================================================================ 第五部分：游戏
+  // 《拾物奇谭》——摄像头是手柄，YOLO 是输入解析，大模型是主持人，
+  // Harness 负责把这三样咬合成一个回合。规则在 game-rules.js 里锁死，模型只写剧情。
+
+  if (req.method === 'GET' && url.pathname === '/api/game/state') {
+    try {
+      const h = await getGameHarness();
+      const def = questDef(h);
+      const st = def.getState();
+      sendJson(res, 200, {
+        ok: true,
+        state: st,
+        guardian: GUARDIANS[st.level - 1],
+        allGuardians: GUARDIANS.map((g) => ({ level: g.level, name: g.name, element: g.element, hp: g.hp })),
+        elements: ELEMENTS,
+        tools: h.tools.list().map((t) => t.name),
+      });
+    } catch (err) {
+      sendJson(res, 500, { error: err.message });
+    }
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/game/reset') {
+    try {
+      const h = await getGameHarness();
+      const def = questDef(h);
+      await def.reset();
+      // 重开一局也顺手开新会话，守阁灵不该记得上一局的恩怨
+      h.agent.session = new SessionTree();
+      sendJson(res, 200, { ok: true, state: def.getState() });
+    } catch (err) {
+      sendJson(res, 500, { error: err.message });
+    }
+    return;
+  }
+
+  // 献祭一次。不传 label 就自己去摄像头取当前最像主角的那个物件
+  if (req.method === 'POST' && url.pathname === '/api/game/act') {
+    let payload = {};
+    try {
+      payload = JSON.parse(await readBody(req));
+    } catch {
+      payload = {};
+    }
+
+    const h = await getGameHarness();
+    const def = questDef(h);
+    const st = def.getState();
+
+    if (st.over) {
+      sendJson(res, 409, { error: `这一局已经结束（${st.over === 'win' ? '通关' : '失败'}），请先重开` });
+      return;
+    }
+
+    // ---------------------------------------------------------- 祭品从哪来
+    // talk 模式：旅人只是搭话，没举东西。这时候不碰摄像头，让守阁灵自己接话
+    const talking = payload.talk === true;
+    let offering = null;
+
+    if (payload.label) {
+      offering = {
+        label: String(payload.label),
+        conf: Number(payload.conf ?? 0.6),
+        ratio: Number(payload.area_ratio ?? 20) / 100,
+      };
+    } else if (!talking) {
+      try {
+        const js = await cameraDetect();
+        if (js.error) {
+          sendJson(res, 503, { error: `摄像头不可用：${js.error}` });
+          return;
+        }
+        const best = pickOffering(js.detections, js);
+        if (!best) {
+          sendJson(res, 200, {
+            ok: false,
+            empty: true,
+            message: '画面里没有可识别的物件。把东西举高一点、离镜头近一点再来。',
+          });
+          return;
+        }
+        offering = best;
+      } catch (err) {
+        sendJson(res, 503, { error: '读摄像头失败：' + err.message });
+        return;
+      }
+    }
+
+    // talk 模式下 offering 是 null，下面几处都得能扛住
+    const confPct = offering ? (offering.conf * 100).toFixed(0) : '0';
+    const areaPct = offering ? (offering.ratio * 100).toFixed(1) : '0';
+    let goal;
+    if (talking) {
+      goal = String(payload.prompt || '').trim() || '旅人站在你面前，什么也没说。';
+    } else {
+      const n = st.offerings.length + 1;
+      // 每回合换一个切入角度，否则小模型会连续几回合复述同一个句子
+      const ANGLES = [
+        '这一回从声音写起', '这一回从气味写起', '这一回从触感写起',
+        '这一回从光线写起', '这一回从守阁灵身上某个具体部位写起',
+        '这一回从一段旧回忆写起', '这一回从地面或墙上的变化写起',
+      ];
+      const angle = ANGLES[Math.floor(Math.random() * ANGLES.length)];
+      goal = payload.prompt && String(payload.prompt).trim()
+        ? String(payload.prompt).trim()
+        : `旅人第 ${n} 次献祭，把【${offering.label}】举到了你面前`
+          + `（识别置信度 ${offering.conf.toFixed(2)}，占画面 ${areaPct}%）。`
+          + `按规则裁定它。写剧情时${angle}。`;
+    }
+
+    // ---------------------------------------------------------- 流式回传
+    res.writeHead(200, {
+      'content-type': 'application/x-ndjson; charset=utf-8',
+      'cache-control': 'no-cache',
+      connection: 'keep-alive',
+      'x-accel-buffering': 'no',
+    });
+    const emit = (evt) => {
+      if (!res.writableEnded) res.write(JSON.stringify(evt) + '\n');
+    };
+
+    const controller = new AbortController();
+    gameRun = { controller, pending: null };
+    const off = h.lifecycle.onEvent(emit);
+
+    emit({
+      type: 'offering',
+      label: offering ? offering.label : null,
+      conf: offering ? offering.conf : null,
+      areaRatio: offering ? Number(areaPct) : null,
+      confPct: offering ? Number(confPct) : null,
+      talk: talking,
+    });
+
+    try {
+      const result = await h.agent.run(goal, {
+        signal: controller.signal,
+        continueSession: true,
+        confirm: (info) =>
+          new Promise((resolve) => {
+            const id = `g${++confirmSeq}`;
+            gameRun.pending = { id, resolve, info };
+            emit({
+              type: 'confirm_request',
+              id,
+              name: info.name,
+              level: info.level,
+              levelLabel: info.levelLabel,
+              args: info.args,
+            });
+          }),
+      });
+
+      const after = def.getState();
+      const last = after.offerings[after.offerings.length - 1] || null;
+      emit({
+        type: 'final',
+        text: result.text,
+        turns: result.turns,
+        toolCalls: result.toolCalls,
+        ms: result.ms,
+        state: after,
+        lastOffering: last,
+        guardian: GUARDIANS[after.level - 1],
+      });
+    } catch (err) {
+      emit({ type: 'error', message: err.message });
+    }
+    off();
+    gameRun = null;
+    res.end();
+    return;
+  }
+
+  // 游戏里的权限表态（守阁灵要写战报时）
+  if (req.method === 'POST' && url.pathname === '/api/game/confirm') {
+    let payload;
+    try {
+      payload = JSON.parse(await readBody(req));
+    } catch {
+      sendJson(res, 400, { error: '请求体不是合法 JSON' });
+      return;
+    }
+    if (!gameRun || !gameRun.pending || gameRun.pending.id !== payload.id) {
+      sendJson(res, 409, { error: '没有待确认的请求' });
+      return;
+    }
+    const { resolve } = gameRun.pending;
+    gameRun.pending = null;
+    resolve(payload.allow === true);
+    sendJson(res, 200, { ok: true });
+    return;
   }
 
   res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }).end('404');

@@ -1,9 +1,24 @@
 {
   "level": 1,
-  "playerHp": 100,
-  "guardianHp": 50,
-  "offerings": [],
+  "playerHp": 95,
+  "guardianHp": 5,
+  "offerings": [
+    {
+      "round": 1,
+      "level": 1,
+      "label": "cup",
+      "element": "water",
+      "elementName": "水",
+      "damage": 45,
+      "grade": "A",
+      "verdict": "克制",
+      "playerHp": 95,
+      "guardianHp": 5,
+      "at": "2026-10-02T15:25:08.757Z",
+      "counter": 5
+    }
+  ],
   "cleared": false,
   "over": null,
-  "startedAt": "2026-10-02T07:09:10.495Z"
+  "startedAt": "2026-10-02T14:57:37.731Z"
 }

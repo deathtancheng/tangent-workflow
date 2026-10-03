@@ -76,6 +76,14 @@ function scheduleRender() {
 function setStatus(kind, text) {
   dot.className = 'dot ' + kind;
   statusText.textContent = text;
+  // 侧栏那颗光球跟着状态走：busy 转起来，err 变色
+  const card = $('#agentCard');
+  const title = $('#agentTitle');
+  if (card) {
+    card.classList.toggle('live', kind === 'busy');
+    card.classList.toggle('err', kind === 'err');
+  }
+  if (title) title.textContent = kind === 'busy' ? '思考中…' : '华小牛';
 }
 
 // ── 消息渲染 ─────────────────────────────────────────────
@@ -269,7 +277,9 @@ $('#newChat').addEventListener('click', () => {
 
 // ── 视觉面板（YOLO 实时检测） ─────────────────────────────
 const appEl = document.querySelector('.app');
-const visionEl = $('#vision');
+const visionEl = $('#drawerVision');
+const harnessDrawer = $('#drawerHarness');
+const driftEl = $('#drift');
 const camStream = $('#camStream');
 const camFallback = $('#camFallback');
 const camStats = $('#camStats');
@@ -313,24 +323,64 @@ async function refreshDetection() {
   }
 }
 
-function openVision() {
-  visionEl.hidden = false;
-  appEl.classList.add('with-vision');
-  camStream.src = '/api/camera/video?t=' + Date.now();
-  refreshDetection();
-  visionTimer = setInterval(refreshDetection, 2500);
+// ── 抽屉：同一时刻只开一个 ───────────────────────────────
+function openDrawer(which) {
+  const target = which === 'vision' ? visionEl : harnessDrawer;
+  const other = which === 'vision' ? harnessDrawer : visionEl;
+  if (!other.hidden) closeDrawer(other === visionEl ? 'vision' : 'harness');
+  if (!target.hidden) return;
+
+  target.hidden = false;
+  driftEl.classList.add('show');
+  requestAnimationFrame(() => target.classList.add('on'));
+
+  const btn = which === 'vision' ? $('#visionToggle') : $('#harnessToggle');
+  if (btn) btn.classList.add('on');
+
+  if (which === 'vision') {
+    camStream.src = '/api/camera/video?t=' + Date.now();
+    refreshDetection();
+    visionTimer = setInterval(refreshDetection, 2500);
+  } else {
+    loadHarnessState();
+  }
 }
 
-function closeVision() {
-  visionEl.hidden = true;
-  appEl.classList.remove('with-vision');
-  camStream.removeAttribute('src');
-  clearInterval(visionTimer);
-  visionTimer = null;
+function closeDrawer(which) {
+  const el2 = which === 'vision' ? visionEl : harnessDrawer;
+  if (el2.hidden) return;
+  el2.classList.remove('on');
+  const btn = which === 'vision' ? $('#visionToggle') : $('#harnessToggle');
+  if (btn) btn.classList.remove('on');
+
+  setTimeout(() => {
+    if (el2.classList.contains('on')) return;   // 又被打开了，别真关
+    el2.hidden = true;
+    if (visionEl.hidden && harnessDrawer.hidden) driftEl.classList.remove('show');
+  }, 240);
+
+  if (which === 'vision') {
+    camStream.removeAttribute('src');
+    clearInterval(visionTimer);
+    visionTimer = null;
+  }
 }
+
+// 旧名字保留，兼容原有调用
+const openVision = () => openDrawer('vision');
+const closeVision = () => closeDrawer('vision');
+const openHarness = () => openDrawer('harness');
+const closeHarness = () => closeDrawer('harness');
 
 $('#visionToggle').addEventListener('click', () => (visionEl.hidden ? openVision() : closeVision()));
-$('#visionClose').addEventListener('click', closeVision);
+$('#harnessToggle').addEventListener('click', () => (harnessDrawer.hidden ? openHarness() : closeHarness()));
+document.querySelectorAll('.drawer-close').forEach((b) => {
+  b.addEventListener('click', () => closeDrawer(b.dataset.close === 'drawerVision' ? 'vision' : 'harness'));
+});
+driftEl.addEventListener('click', () => { closeVision(); closeHarness(); });
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { closeVision(); closeHarness(); }
+});
 $('#btnRefreshDetect').addEventListener('click', refreshDetection);
 camStream.addEventListener('error', () => {
   camFallback.textContent = CAM_HINT;
@@ -369,7 +419,7 @@ $('#btnAskVision').addEventListener('click', async () => {
 // 和左边那个聊天窗的区别：左边只看到"答案"，这里看的是 Harness 的内部——
 // 每一轮的边界、每个工具的进出、上下文什么时候被压缩、什么时候回来敲门。
 // 事件全部来自 lifecycle.emit()，是纯观测流，不参与 agent 的决策。
-const hEl = $('#harness');
+const hEl = harnessDrawer;
 const hTimeline = $('#hTimeline');
 const hState = $('#hState');
 const hConfirm = $('#hConfirm');
@@ -543,22 +593,7 @@ function showHarnessResult(r) {
     + renderMd(r.text || '（无文本输出）');
 }
 
-function openHarness() {
-  if (!visionEl.hidden) closeVision();
-  hEl.hidden = false;
-  appEl.classList.add('with-harness');
-  $('#harnessToggle').classList.add('on');
-  loadHarnessState();
-}
-
-function closeHarness() {
-  hEl.hidden = true;
-  appEl.classList.remove('with-harness');
-  $('#harnessToggle').classList.remove('on');
-}
-
-$('#harnessToggle').addEventListener('click', () => (hEl.hidden ? openHarness() : closeHarness()));
-$('#harnessClose').addEventListener('click', closeHarness);
+$('#harnessClose')?.addEventListener('click', closeHarness);
 hRun.addEventListener('click', runHarness);
 $('#hClear').addEventListener('click', () => { hTimeline.innerHTML = '<div class="h-empty">已清空。</div>'; });
 $('#hReset').addEventListener('click', async () => {

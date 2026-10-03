@@ -19,9 +19,21 @@
     </div>
 
     <button id="newChat" class="btn-new">＋ 新对话</button>
-    <button id="visionToggle" class="btn-vision">👁 视觉面板（YOLO）</button>
-    <button id="harnessToggle" class="btn-harness">🧩 Harness 工作台</button>
-    <a id="gameEntry" class="btn-game" href="/public/game.html">🎮 拾物奇谭（游戏）</a>
+
+    <nav class="nav">
+      <button id="visionToggle" class="nav-item" data-panel="vision">
+        <span class="ni-ico">👁</span>
+        <span class="ni-txt"><b>视觉面板</b><i>YOLO 实时检测</i></span>
+      </button>
+      <button id="harnessToggle" class="nav-item" data-panel="harness">
+        <span class="ni-ico">🧩</span>
+        <span class="ni-txt"><b>Harness 工作台</b><i>看它一层层往下走</i></span>
+      </button>
+      <a id="gameEntry" class="nav-item game" href="/public/game.html">
+        <span class="ni-ico">🎮</span>
+        <span class="ni-txt"><b>拾物奇谭</b><i>摄像头当手柄的游戏</i></span>
+      </a>
+    </nav>
 
     <div class="panel">
       <label class="field">
@@ -56,9 +68,13 @@
       </ul>
     </div>
 
-    <div class="status">
-      <span id="dot" class="dot"></span>
-      <span id="statusText">正在连接…</span>
+    <div class="agent-card" id="agentCard">
+      <span class="orb" id="orb"></span>
+      <span class="agent-meta">
+        <strong id="agentTitle">华小牛</strong>
+        <span id="statusText">正在连接…</span>
+      </span>
+      <span class="dot" id="dot" style="margin-left:auto"></span>
     </div>
   </aside>
 
@@ -83,39 +99,42 @@
       <button id="stopBtn" class="btn-stop" title="停止" hidden>■</button>
     </div>
   </main>
+</div>
 
-  <!-- ── 视觉面板（YOLO 实时检测） ─────────────── -->
-  <aside id="vision" class="vision" hidden>
-    <div class="vision-head">
-      <strong>视觉 · YOLO 实时检测</strong>
-      <button id="visionClose" class="icon-btn" title="收起">✕</button>
-    </div>
+<!-- ── 右侧抽屉：视觉 / Harness 共用同一个壳体 ─────────────── -->
+<div id="drift" class="drift"></div>
 
+<div id="drawerVision" class="drawer" hidden>
+  <div class="drawer-head">
+    <div class="dh-title"><span class="dh-ico">👁</span><strong>视觉 · YOLO 实时检测</strong></div>
+    <button class="icon-btn drawer-close" data-close="drawerVision" title="收起">✕</button>
+  </div>
+  <div class="drawer-body">
     <div class="vision-screen">
       <img id="camStream" alt="摄像头实时流" />
       <div id="camFallback" class="cam-fallback">摄像头服务未启动</div>
+      <div class="scanline"></div>
+      <div class="corners"><i></i><i></i><i></i><i></i></div>
     </div>
 
     <div id="camStats" class="vision-stats">等待摄像头服务…</div>
     <div id="camDetections" class="vision-detections">暂无检测结果</div>
 
-    <div class="vision-actions">
+    <div class="drawer-actions">
       <button id="btnRefreshDetect" class="btn-ghost">刷新检测</button>
       <button id="btnAskVision" class="btn-solid">让 AI 描述画面</button>
     </div>
-  </aside>
+  </div>
+</div>
 
-  <!-- ── Harness 工作台（第四部分） ──────────────────────── -->
-  <aside id="harness" class="harness" hidden>
-    <div class="harness-head">
-      <strong>Harness 工作台</strong>
-      <button id="harnessClose" class="icon-btn" title="收起">✕</button>
-    </div>
-
-    <!-- 装配状态 -->
+<div id="drawerHarness" class="drawer" hidden>
+  <div class="drawer-head">
+    <div class="dh-title"><span class="dh-ico">🧩</span><strong>Harness 工作台</strong></div>
+    <button class="icon-btn drawer-close" data-close="drawerHarness" title="收起">✕</button>
+  </div>
+  <div class="drawer-body">
     <div id="hState" class="h-state">装载中…</div>
 
-    <!-- 目标输入 -->
     <div class="h-goal">
       <textarea id="hGoal" rows="3" placeholder="给它一个目标，然后你就是启动子。&#10;例：查一下 YOLO11 相比 YOLOv8 改了什么，存一份笔记，把结论记进长期记忆。"></textarea>
       <div class="h-goal-actions">
@@ -125,7 +144,6 @@
       </div>
     </div>
 
-    <!-- 权限闸门 -->
     <div id="hConfirm" class="h-confirm" hidden>
       <div class="h-confirm-title">⚠ 需要你点头</div>
       <div id="hConfirmBody" class="h-confirm-body"></div>
@@ -135,7 +153,6 @@
       </div>
     </div>
 
-    <!-- 时间线 -->
     <div class="h-timeline-head">
       <span>trace 时间线</span>
       <button id="hClear" class="link-btn">清空</button>
@@ -144,9 +161,8 @@
       <div class="h-empty">还没跑过。给它一个目标，看它一层层往下走。</div>
     </div>
 
-    <!-- 结论 -->
     <div id="hResult" class="h-result" hidden></div>
-  </aside>
+  </div>
 </div>
 
 <script src="/public/app.js"></script>

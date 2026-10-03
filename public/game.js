@@ -19,11 +19,109 @@ const el = {
   pBar: $('pBar'), pHp: $('pHp'),
   speech: $('speech'), log: $('log'), chips: $('chips'),
   offerName: $('offerName'), offerMeta: $('offerMeta'), btnOffer: $('btnOffer'),
+  mItems: $('mItems'), progress: $('progress'), fxLayer: $('fxLayer'),
+  flash: $('flash'), guardianBox: document.querySelector('.guardian'),
+  gBarWrap: $('gBarWrap'), pBarWrap: document.querySelector('.player-row .bar'),
   btnReset: $('btnReset'), btnSay: $('btnSay'), chat: $('chat'),
   cam: $('cam'), camWrap: $('camWrap'), overlay: $('overlay'),
   hDot: $('hDot'), hStat: $('hStat'),
   modal: $('modal'), mTitle: $('mTitle'), mBody: $('mBody'), mPre: $('mPre'), mActs: $('mActs'),
 };
+
+/* ══════════════════════════════════════════════════════════════
+   氛围：飘浮的尘埃
+   一小撮光点在纸面上慢慢游，让画面"活"着。
+   用 canvas 而不是 DOM，因为要跑 60fps 且元素多。
+   ══════════════════════════════════════════════════════════════ */
+(function motes() {
+  const cv = $('motes');
+  if (!cv) return;
+  const g = cv.getContext('2d');
+  let W, H, dots = [];
+  const COUNT = 46;
+
+  function resize() {
+    W = cv.width = window.innerWidth;
+    H = cv.height = window.innerHeight;
+    dots = Array.from({ length: COUNT }, () => ({
+      x: Math.random() * W,
+      y: Math.random() * H,
+      r: Math.random() * 1.7 + 0.5,
+      vx: (Math.random() - 0.5) * 0.16,
+      vy: -Math.random() * 0.2 - 0.04,
+      a: Math.random() * 0.32 + 0.08,
+      ph: Math.random() * Math.PI * 2,
+    }));
+  }
+
+  function tick(t) {
+    g.clearRect(0, 0, W, H);
+    for (const d of dots) {
+      d.x += d.vx;
+      d.y += d.vy;
+      if (d.y < -6) { d.y = H + 6; d.x = Math.random() * W; }
+      if (d.x < -6) d.x = W + 6;
+      if (d.x > W + 6) d.x = -6;
+      // 呼吸般的明暗
+      const alpha = d.a * (0.6 + 0.4 * Math.sin(t / 1400 + d.ph));
+      g.beginPath();
+      g.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+      g.fillStyle = `rgba(126, 155, 110, ${alpha})`;
+      g.fill();
+    }
+    requestAnimationFrame(tick);
+  }
+
+  resize();
+  window.addEventListener('resize', resize);
+  requestAnimationFrame(tick);
+})();
+
+/* ══════════════════════════════════════════════════════════════
+   特效小工具
+   ══════════════════════════════════════════════════════════════ */
+
+/** 伤害数字飘出。x/y 是屏幕坐标 */
+function floatDamage(text, x, y, kind = '') {
+  const d = document.createElement('div');
+  d.className = 'dmg-float' + (kind ? ' ' + kind : '');
+  d.textContent = text;
+  d.style.left = x + 'px';
+  d.style.top = y + 'px';
+  el.fxLayer.appendChild(d);
+  setTimeout(() => d.remove(), 1600);
+}
+
+/** 闪屏：red = 旅人挨打，gold = 大事（升级/通关） */
+function flash(kind) {
+  el.flash.className = 'flash';
+  void el.flash.offsetWidth;      // 强制重排，让动画能重播
+  el.flash.classList.add(kind);
+}
+
+/** 某个元素在屏幕上的中心点 */
+function centerOf(node) {
+  const r = node.getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+}
+
+/** 给元素加一个一次性动画类 */
+function bump(node, cls, ms = 600) {
+  if (!node) return;
+  node.classList.remove(cls);
+  void node.offsetWidth;
+  node.classList.add(cls);
+  setTimeout(() => node.classList.remove(cls), ms);
+}
+
+/** 画五层进度 */
+function renderProgress(level, over) {
+  if (!el.progress) return;
+  el.progress.querySelectorAll('i').forEach((i) => {
+    const n = Number(i.dataset.lv);
+    i.className = n < level ? 'done' : n === level ? (over ? 'done' : 'now') : '';
+  });
+}
 
 let state = null;
 let guardian = null;
@@ -31,6 +129,9 @@ let elements = {};
 let busy = false;
 let round = 0;
 let lastBest = null;
+/** 手动举物：没有摄像头（或想演示特定克制）时，用户点按钮指定的祭品。
+ *  存在时优先级高于摄像头，献祭一次后清空，回到摄像头模式。 */
+let manualOffering = null;
 
 // ---------------------------------------------------------------- 摄像头取物
 /** 跟服务端 game-rules.js 里 pickOffering 同一套打分：认得准 + 占画面大 */
@@ -83,6 +184,11 @@ function drawBoxes(js) {
 }
 
 async function pollDetect() {
+  // 手动举物期间不让摄像头轮询抢走祭品——用户明确指定的优先
+  if (manualOffering) {
+    setTimeout(pollDetect, 1200);
+    return;
+  }
   try {
     const r = await fetch('/api/camera/detect');
     if (!r.ok) throw new Error(r.status);
@@ -100,23 +206,35 @@ async function pollDetect() {
   setTimeout(pollDetect, 1200);
 }
 
+let lastShownLabel = null;
+
 function renderOffering(best, js) {
   if (!best) {
     el.offerName.textContent = '镜头前还没有东西';
     el.offerName.classList.add('empty');
     el.offerMeta.innerHTML = '';
     el.btnOffer.disabled = busy;
+    lastShownLabel = null;
     return;
+  }
+  // 换了个东西才弹一下，不然每隔 1.2 秒轮询会一直闪
+  if (best.label !== lastShownLabel) {
+    lastShownLabel = best.label;
+    bump(el.offerName, 'pop', 450);
   }
   el.offerName.textContent = best.label;
   el.offerName.classList.remove('empty');
   const ele = elements[elementOfLocal(best.label)];
-  el.offerMeta.innerHTML = [
-    `识别置信度 <b>${(best.conf * 100).toFixed(0)}%</b>`,
-    `占画面 <b>${(best.ratio * 100).toFixed(1)}%</b>`,
-    ele ? `属性 <b>${ele.name}</b>` : '',
-    js && js.detections ? `画面共 ${js.detections.length} 个目标` : '',
-  ].filter(Boolean).join('');
+  // 手动举物是用户自己点的，没有"识别置信度"这回事——别编数字
+  el.offerMeta.innerHTML = best.manual
+    ? [`手动举物`, ele ? `属性 <b>${ele.name}</b>` : '', `威力按 <b>32%</b> 画面占比计`]
+      .filter(Boolean).join('')
+    : [
+      `识别置信度 <b>${(best.conf * 100).toFixed(0)}%</b>`,
+      `占画面 <b>${(best.ratio * 100).toFixed(1)}%</b>`,
+      ele ? `属性 <b>${ele.name}</b>` : '',
+      js && js.detections ? `画面共 ${js.detections.length} 个目标` : '',
+    ].filter(Boolean).join('');
   el.btnOffer.disabled = busy || (state && state.over);
 }
 
@@ -141,6 +259,10 @@ function elementOfLocal(label) {
 }
 
 // ---------------------------------------------------------------- 局面渲染
+// 上一次画出来的血量，用来判断这一帧该不该闪。null = 第一次画，不闪
+let prevGHp = null;
+let prevPHp = null;
+
 function renderState() {
   if (!state || !guardian) return;
   el.lv.textContent = state.level;
@@ -151,12 +273,23 @@ function renderState() {
   el.gTone.textContent = guardian.persona || '';
   el.gScene.textContent = guardian.scene || '';
 
+  // 把属性色喂给 CSS，血条、光晕、取景框都跟着换色
+  if (el.guardianBox) el.guardianBox.style.setProperty('--ele-color', e.color);
+
   const gp = Math.max(0, Math.round((state.guardianHp / guardian.hp) * 100));
   el.gBar.style.width = gp + '%';
   el.gHp.textContent = `守阁灵 ${state.guardianHp} / ${guardian.hp}`;
-  const pp = Math.max(0, Math.round(state.playerHp / 100 * 100));
+  const pp = Math.max(0, Math.round((state.playerHp / 100 * 100)));
   el.pBar.style.width = pp + '%';
   el.pHp.textContent = `旅人 ${state.playerHp} / 100`;
+
+  // 血量掉了就抖一下，让"挨打"有触感
+  if (prevGHp !== null && state.guardianHp < prevGHp) bump(el.gBarWrap, 'hit');
+  if (prevPHp !== null && state.playerHp < prevPHp) bump(el.pBarWrap, 'hit');
+  prevGHp = state.guardianHp;
+  prevPHp = state.playerHp;
+
+  renderProgress(state.level, state.over);
 }
 
 function setBusy(on) {
@@ -178,7 +311,7 @@ function chip(text, cls) {
 
 function addLog(item) {
   const row = document.createElement('div');
-  row.className = 'row';
+  row.className = 'row' + (item.fresh ? ' new' : '');
   row.innerHTML = `<span class="idx">${item.idx}</span>`
     + `<span class="what">${item.html}</span>`
     + `<span class="dmg">${item.right || ''}</span>`;
@@ -309,7 +442,25 @@ async function act({ offering = null, prompt = null, talk = false }) {
             idx: round,
             html: `献上 <b>${o.label}</b> <span class="tag">${o.elementName || ''}</span> ${tag}`,
             right: `<span class="grade ${o.grade}">${o.grade}</span>${o.damage} 伤害`,
+            fresh: true,
           });
+
+          // ---- 打击感 ----
+          // 伤害先从守阁灵身上飘出来，克制时更大更金
+          const crit = o.verdict === '克制' ? 'crit' : '';
+          if (el.guardianBox) {
+            const g = centerOf(el.guardianBox);
+            floatDamage(`-${o.damage}`, g.x - 20, g.y - 10, crit);
+            if (o.damage > 0) bump(el.guardianBox, 'struck', 500);
+          }
+          // 旅人自己挨的反伤，从血条那儿飘，并且闪红
+          if (o.counter > 0) {
+            const p = el.pBarWrap ? centerOf(el.pBarWrap) : { x: window.innerWidth / 2, y: 200 };
+            floatDamage(`-${o.counter}`, p.x - 20, p.y, 'counter');
+            flash('red');
+          } else if (o.damage > 0) {
+            flash(crit ? 'gold' : '');
+          }
         }
         el.hStat.textContent = `${evt.turns} 轮 · ${evt.toolCalls} 次工具 · ${(evt.ms / 1000).toFixed(1)}s`;
         if (evt.state && evt.state.over) {
@@ -343,6 +494,12 @@ async function doReset() {
   el.speech.textContent = '阁门重新开启……';
   el.log.innerHTML = '';
   round = 0;
+  manualOffering = null;
+  lastShownLabel = null;
+  // 新的一局：血量重新从满开始，别把上一局的血当成"掉血"闪一下
+  prevGHp = null;
+  prevPHp = null;
+  if (el.mItems) el.mItems.querySelectorAll('.m-item').forEach((b) => b.classList.remove('on'));
   await fetch('/api/game/reset', { method: 'POST' });
   await fetchState();
   setBusy(false);
@@ -353,6 +510,27 @@ async function doReset() {
 el.btnOffer.addEventListener('click', () => {
   if (!lastBest || busy) return;
   act({ offering: lastBest });
+  // 手动举物是一次性的：献祭完就交还给摄像头
+  if (manualOffering) {
+    manualOffering = null;
+    el.mItems.querySelectorAll('.m-item').forEach((b) => b.classList.remove('on'));
+  }
+});
+
+// 手动举物：没有摄像头 / 想演示特定克制关系时的降级入口
+el.mItems.addEventListener('click', (ev) => {
+  const btn = ev.target.closest('.m-item');
+  if (!btn || busy || (state && state.over)) return;
+  el.mItems.querySelectorAll('.m-item').forEach((b) => b.classList.remove('on'));
+  btn.classList.add('on');
+  manualOffering = {
+    label: btn.dataset.label,
+    conf: 0.9,
+    ratio: 0.32,
+    manual: true,
+  };
+  lastBest = manualOffering;
+  renderOffering(lastBest, null);
 });
 
 el.btnSay.addEventListener('click', () => {

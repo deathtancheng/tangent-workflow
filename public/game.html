@@ -7,23 +7,52 @@
 <link rel="stylesheet" href="/public/game.css">
 </head>
 <body>
+
+<!-- 氛围层：飘浮尘埃 + 墨渍，纯装饰，不接事件 -->
+<div class="ambient" aria-hidden="true">
+  <div class="ink-blot b1"></div>
+  <div class="ink-blot b2"></div>
+  <div class="ink-blot b3"></div>
+  <canvas id="motes"></canvas>
+</div>
+
 <div class="stage">
 
   <header>
-    <h1>拾物奇谭</h1>
-    <span class="sub">摄像头是手柄 · YOLO 读招 · 本地大模型当守阁灵</span>
-    <span class="floor">第 <b id="lv">1</b> / 5 层</span>
-    <button class="btn" id="btnReset">重开一局</button>
-    <a class="btn" href="/">← 回实验室</a>
+    <div class="title-block">
+      <h1 data-text="拾物奇谭">拾物奇谭</h1>
+      <span class="sub">摄像头是手柄 · YOLO 读招 · 本地大模型当守阁灵</span>
+    </div>
+    <div class="head-right">
+      <div class="floor-pill">
+        <span class="fp-label">层</span>
+        <b id="lv">1</b>
+        <span class="fp-total">/ 5</span>
+      </div>
+      <button class="btn" id="btnReset">重开一局</button>
+      <a class="btn" href="/">← 回实验室</a>
+    </div>
   </header>
+
+  <!-- 五层进度：走到哪一层亮哪一颗 -->
+  <div class="progress" id="progress">
+    <i data-lv="1"></i><i data-lv="2"></i><i data-lv="3"></i>
+    <i data-lv="4"></i><i data-lv="5"></i>
+  </div>
 
   <main>
     <!-- 左：摄像头 + 祭品 -->
     <section>
-      <div class="cam-wrap" id="camWrap">
-        <img id="cam" src="/api/camera/video" alt="摄像头">
-        <canvas id="overlay"></canvas>
-        <div class="cam-off">摄像头未连接<br><small>启动 yolo/camera_server.py 后刷新</small></div>
+      <div class="panel-frame">
+        <div class="frame-corner tl"></div><div class="frame-corner tr"></div>
+        <div class="frame-corner bl"></div><div class="frame-corner br"></div>
+
+        <div class="cam-wrap" id="camWrap">
+          <img id="cam" src="/api/camera/video" alt="摄像头">
+          <canvas id="overlay"></canvas>
+          <div class="scan"></div>
+          <div class="cam-off">摄像头未连接<br><small>没有也能玩——下面可以手动举物</small></div>
+        </div>
       </div>
 
       <div class="offer">
@@ -31,9 +60,23 @@
         <div class="name empty" id="offerName">镜头前还没有东西</div>
         <div class="meta" id="offerMeta"></div>
         <button class="btn-offer" id="btnOffer" disabled>献 祭 此 物</button>
+
+        <div class="manual">
+          <div class="m-hint">没有摄像头？手动举物 ↓</div>
+          <div class="m-items" id="mItems">
+            <button class="m-item" data-label="cup">杯子<i>水</i></button>
+            <button class="m-item" data-label="bottle">瓶子<i>水</i></button>
+            <button class="m-item" data-label="toaster">烤面包机<i>火</i></button>
+            <button class="m-item" data-label="scissors">剪刀<i>金</i></button>
+            <button class="m-item" data-label="potted plant">盆栽<i>木</i></button>
+            <button class="m-item" data-label="cell phone">手机<i>电</i></button>
+            <button class="m-item" data-label="laptop">笔电<i>电</i></button>
+            <button class="m-item" data-label="book">书<i>知</i></button>
+          </div>
+        </div>
       </div>
 
-      <div class="banner" style="margin-top:12px">
+      <div class="banner">
         举得<b>越近越大</b>威力越高，识别<b>越准</b>打得越实，
         属性<b>克制</b>守阁灵时伤害接近翻倍。
       </div>
@@ -47,18 +90,24 @@
           <span class="g-ele" id="gEle">—</span>
           <span class="g-tone" id="gTone"></span>
         </div>
-        <div class="bar"><i id="gBar"></i></div>
-        <div class="hp-text"><span id="gHp">— / —</span><span id="gScene"></span></div>
+        <div class="bar" id="gBarWrap"><i id="gBar"></i></div>
+        <div class="hp-text">
+          <span id="gHp">— / —</span>
+          <span id="gScene"></span>
+        </div>
       </div>
 
       <div class="speech" id="speech">阁门未开……</div>
 
       <div class="player-row">
-        <div class="who"><span>旅人</span><span class="hp-text" style="margin:0" id="pHp">100 / 100</span></div>
+        <div class="who">
+          <span>旅人</span>
+          <span class="hp-text" style="margin:0" id="pHp">100 / 100</span>
+        </div>
         <div class="bar player"><i id="pBar"></i></div>
       </div>
 
-      <div class="chips" id="chips" style="margin-top:10px"></div>
+      <div class="chips" id="chips"></div>
     </section>
   </main>
 
@@ -76,6 +125,12 @@
   </footer>
 
 </div>
+
+<!-- 打击数字飘出层 -->
+<div class="fx-layer" id="fxLayer" aria-hidden="true"></div>
+
+<!-- 屏幕闪白（受击）层 -->
+<div class="flash" id="flash" aria-hidden="true"></div>
 
 <!-- 权限闸门 / 结算 -->
 <div class="modal" id="modal">

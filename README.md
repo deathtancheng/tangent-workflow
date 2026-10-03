@@ -315,6 +315,19 @@ local-ai-lab/
 
 ## 怎么跑
 
+**只想玩游戏：双击 `game.bat`**（确保 Web 服务在跑 → 打开游戏页）。
+
+**全都要：双击 `start.bat`**（自动检查 Ollama、拉起摄像头和 Web 服务、
+游戏页 + 智能体工作台都打开）。也可以带参数只开一个：
+`start.bat game` / `start.bat agent`。
+
+结束运行 `stop.bat`。
+
+> 没有 exe。这项目是 Node + Python 脚本，不打包成 exe——
+> 两个 bat 就是它的"启动器"，双击即用。
+
+手动启动：
+
 ```bash
 # 1. Ollama（模型已拉过就不用再跑）
 ollama serve
@@ -329,12 +342,24 @@ D:/yolo-venv/Scripts/python.exe camera_server.py \
 node server.js          # → http://127.0.0.1:5178
 ```
 
+> 别用 `node server.js &` 后台启动 —— 进程会随终端关闭被回收（本机实测过）。
+> 要么独立窗口，要么直接用 bat。
+
 然后：
 
-- `http://127.0.0.1:5178` —— 主工作台（对话、YOLO 视觉面板、🧩 Harness 工作台）
 - `http://127.0.0.1:5178/public/game.html` —— 《拾物奇谭》
+- `http://127.0.0.1:5178/` —— **智能体工作台**（对话、YOLO 视觉面板、🧩 Harness 工作台）。
+  智能体没有单独的开关——打开这个页面它就在了，左边输入框直接使唤，
+  它会真的去调工具（算数、读文件、识图、动摄像头）。游戏里的守阁灵也是它扮的。
 - `node harness/smoke.js` —— 内核冒烟
 - `node harness/e2e.js "目标"` —— Harness 端到端
+- `node harness/game-auto.js` —— 自动通关（人类只按一次启动键，约 70 秒）
+- `node harness/game-play.js cup 0.9 32` —— 单回合命令行试玩
+
+**没有摄像头也能玩**：游戏页上有「手动举物」按钮，能完整通关五层。
+
+**要拿去演示给人看**：见 [`DEMO.md`](DEMO.md) —— 里面有 5 分钟演示脚本、
+每层该举什么、故障预案，以及对方可能追问的问题怎么答。
 - `node harness/game-auto.js` —— 自动通关演示（人类只按一次启动键）
 
 ## 后续

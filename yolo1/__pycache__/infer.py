@@ -185,8 +185,14 @@ class Detector:
             preds = self._ort.run(None, {self._input: x})[0]
             items = self._postprocess(preds, shape)
         else:
+            # 精度参数：ultralytics 8.4 起 half 已弃用，改用 quantize（16=FP16）。
+            # 关键：half 只要传了（哪怕传 False）就会每帧打印一次弃用警告，
+            # 摄像头 50FPS 跑几小时能堆出几十万行日志。所以 FP32 时干脆不传。
+            kwargs = {"verbose": False}
+            if self.fp16:
+                kwargs["quantize"] = 16
             res = self._model.predict(
-                bgr, imgsz=self.imgsz, conf=self.conf, half=self.fp16, verbose=False
+                bgr, imgsz=self.imgsz, conf=self.conf, **kwargs
             )[0]
             items = []
             for b in res.boxes:

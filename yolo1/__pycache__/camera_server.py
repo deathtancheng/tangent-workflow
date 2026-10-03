@@ -96,6 +96,19 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass  # 静音，别刷屏
 
+    def handle_one_request(self):
+        """客户端关掉页面、或切走视频流时会强断连接。
+
+        Windows 上这时抛的是 ConnectionAbortedError（WinError 10053），
+        不属于 BrokenPipeError / ConnectionResetError，所以光在推流循环里
+        捕获那两个是不够的——异常会一路冒泡到 socketserver.handle_error，
+        每次断开往日志里甩一整个 traceback。这里统一兜住。
+        """
+        try:
+            super().handle_one_request()
+        except OSError:
+            self.close_connection = True
+
     def _cors(self):
         self.send_header("Access-Control-Allow-Origin", "*")
 
@@ -134,8 +147,8 @@ class Handler(BaseHTTPRequestHandler):
                     self.wfile.write(f"Content-Length: {len(data)}\r\n\r\n".encode())
                     self.wfile.write(data + b"\r\n")
                     time.sleep(0.03)
-            except (BrokenPipeError, ConnectionResetError):
-                return
+            except OSError:
+                return  # 客户端断开，正常退出
 
         elif path == "/snapshot":
             anno, _, _, _ = self.worker.snapshot()
